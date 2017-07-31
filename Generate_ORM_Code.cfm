@@ -2,7 +2,7 @@
 	DataSource - If application.data_source is not already set in your Application.cfc set it here as queries below are based on it 
 --->
 
-<!--- Get table names --->
+<!--- Get table names for the current DB --->
 <cfquery name="qry_tableNames">
 	select name
 	from sys.tables
@@ -28,21 +28,17 @@
 
 	<cfoutput>
 		<cfsavecontent variable="ormCode">
-			<h1>ORM code for table: #qry_tableNames.name#</h1>
+			<h3>ORM code for table: #qry_tableNames.name#</h3>
 			<h4>
 				File should be named #qry_tableNames.name#.cfc<br />
 				Note: Relationships (if any) will need to be manually added
 			</h4>
 
-			&lt;cfcomponent persistent="true"&gt;
-				<br />
-				<cfloop query="qry_tableColumns">
-					&lt;cfproperty name="#qry_tableColumns.column_name#"<cfif first> fieldtype="id" generator="native"<cfset first = false></cfif>&gt;
-
-					<br />
-				</cfloop>
-			&lt;/cfcomponent&gt;
-
+<!--- The below code is placed within a <pre> tag to allow it to be copied as is into cfc file without any  --->
+<pre>
+&lt;cfcomponent persistent="true"&gt;<cfloop query="qry_tableColumns"><br>&##9;&lt;cfproperty name="#qry_tableColumns.column_name#"<cfif first> fieldtype="id" generator="native"<cfset first = false></cfif>&gt;</cfloop>
+&lt;/cfcomponent&gt;
+</pre>
 		</cfsavecontent>
 
 		#ormCode#
