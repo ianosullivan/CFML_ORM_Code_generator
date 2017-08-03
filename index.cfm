@@ -1,8 +1,9 @@
 <!---
-	DataSource - If application.data_source is not already set in your Application.cfc set it here as queries below are based on it 
+	DataSource - If this.datasource is not already set in your Application.cfc set it here as queries below are based on it 
 --->
 
 <cfparam name="URL.tables" default="">
+<cfparam name="URL.datasource" default="LOCODB-DEV">
 
 
 <!--- See code-prettify here - https://github.com/google/code-prettify --->
@@ -14,7 +15,7 @@
 
 <cfif tables EQ "">
 	<!--- Get ALL table names 
-	<cfquery name="qry_tableNames">
+	<cfquery name="qry_tableNames" datasource="#URL.datasource#">
 		SELECT 	name
 		FROM 	sys.tables
 		WHERE 	type = 'U'
@@ -47,7 +48,7 @@
 	<hr/>
 	<br/><br/>
 
-	<cfquery name="qry_tableNames">
+	<cfquery name="qry_tableNames" datasource="#URL.datasource#">
 		SELECT 	name
 		FROM 	sys.tables
 		WHERE 	type = 'U'
@@ -60,7 +61,7 @@
 	<!--- Loop through tables to get column names --->
 	<cfoutput query="qry_tableNames">
 		<!--- Get column names for this table --->
-		<cfquery name="qry_tableColumns">
+		<cfquery name="qry_tableColumns" datasource="#URL.datasource#">
 			SELECT 	column_name
 			FROM 	information_schema.columns
 			WHERE 	table_name = '#qry_tableNames.name#'
@@ -200,7 +201,7 @@
 <cffunction name="getPrimaryKey" returntype="string">
 	<cfargument name="table" type="string">
 
-	<cfquery name="LOCAL.qry">
+	<cfquery name="LOCAL.qry" datasource="#URL.datasource#">
 		SELECT  OBJECT_NAME(ic.OBJECT_ID) AS table_name,
 		        COL_NAME(ic.OBJECT_ID,ic.column_id) AS pk_column_name
 		FROM    sys.indexes AS i 
@@ -223,7 +224,7 @@
 	<cfargument name="type" type="string">
 
 	<!--- Get relationships --->
-	<cfquery name="LOCAL.qry">
+	<cfquery name="LOCAL.qry" datasource="#URL.datasource#">
 		SELECT
 		    o1.name AS FK_table,
 		    c1.name AS FK_column,
