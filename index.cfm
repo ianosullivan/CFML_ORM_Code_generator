@@ -116,7 +116,7 @@
 			<cfset fk_relationships &= '<br>&##9;&lt;!--- &lt;cfproperty name="' & qry_tableColumns.column_name & '"&gt; ---&gt;'>
 
 			<!--- <cfproperty name="Message" fieldtype="many-to-one" cfc="de_msgs_new" fkcolumn="msg_id"> --->
-			<cfset fk_relationships &= '<br>&##9;&lt;cfproperty name="' & uCase(qry_FK_col_relationship.PK_table) & '" fieldtype="many-to-one" ' >
+			<cfset fk_relationships &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_tableColumns.column_name) & '" fieldtype="many-to-one" ' >
 			<cfset fk_relationships &= 'cfc="' & qry_FK_col_relationship.PK_table & '" fkcolumn="' & qry_FK_col_relationship.FK_column & '"' >
 			<cfset fk_relationships &= '&gt;'>
 		</cfif>	
@@ -147,16 +147,16 @@
 
 				<!--- Detailed <cfproperty name="FDI" fieldtype="many-to-many" cfc="fdi" linktable="de_msgs_fdi"      fkcolumn="msg_id" inversejoincolumn="fdi_id"> --->
 				<!--- Simple <cfproperty name="FDI" fieldtype="many-to-many" cfc="fdi" linktable="de_msgs_fdi"> --->
-				<cfset pk_relationships_many_to_many &= '<br>&##9;&lt;cfproperty name="' & uCase(qry_PK_col_relationships.FK_table) & '" fieldtype="many-to-many" ' >
+				<cfset pk_relationships_many_to_many &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_PK_col_relationships.FK_table) & '" fieldtype="many-to-many" ' >
 				<cfset pk_relationships_many_to_many &= 'cfc="' & qry_many_to_many_joining_table.PK_table & '" linktable="' & qry_PK_col_relationships.FK_table & '" '>
 				<!--- This line may note be required. It is only if the column names in the junction/bus table don't match the PK table --->
-				<cfset pk_relationships_many_to_many &= '  fkcolumn="' & qry_PK_col_relationships.FK_column & '" inversejoincolumn="' & qry_many_to_many_joining_table.FK_column & '"'>
+				<cfset pk_relationships_many_to_many &= 'fkcolumn="' & qry_PK_col_relationships.FK_column & '" inversejoincolumn="' & qry_many_to_many_joining_table.FK_column & '"'>
 				<!--- Close the <cfproperty> relationship --->
 				<cfset pk_relationships_many_to_many &= '&gt;'>	
 
 
 			<cfelse> <!--- Adjoining table has a PK so this is treated a a one-to-many join --->
-				<cfset pk_relationships_one_to_many &= '<br>&##9;&lt;cfproperty name="' & uCase(qry_PK_col_relationships.FK_table) & '" fieldtype="one-to-many" ' >
+				<cfset pk_relationships_one_to_many &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_PK_col_relationships.FK_table) & '" fieldtype="one-to-many" ' >
 				<cfset pk_relationships_one_to_many &= 'cfc="' & qry_PK_col_relationships.FK_table & '" fkcolumn="' & qry_PK_col_relationships.FK_column & '"' >
 				<cfset pk_relationships_one_to_many &= '&gt;'>	
 			</cfif>
@@ -186,7 +186,7 @@
 	<cfif pk_relationships_many_to_many NEQ ''>
 		<!--- Output a CF comment --->
 		<cfset ormCode &= '<br><br>&##9;&lt;!--- PK "many-to-many" (junction/bus) Relationships'>
-		<cfset ormCode &= '<br>&##9;Note that the "fkcolumn" and "inversejoincolumn" below MAY NOT be required. <br>&##9;They are only necessary if the column names in the junction/bus table do not match the column names in the corresponding PK table ---&gt;'>
+		<cfset ormCode &= '<br>&##9;Note that the "fkcolumn" and "inversejoincolumn" attributes below are required only if <br>&##9;they column names in the junction/bus table do not match the column names in the corresponding PK/FK tables ---&gt;'>
 		
 		<!--- Add many-to-many relationships --->
 		<cfset ormCode &= pk_relationships_many_to_many>
@@ -283,4 +283,13 @@
 </cffunction>
 
 
-<!--- <cfdump var="#checkRelationship('de_msg_recipients', 'msg_id', 'FK')#"> --->
+<cffunction name="TitleCase" hint="This function is used to create TitleCased relationship names based on the names of the column or table (whichever is applicable)">
+	<cfargument name="val" type="string">
+
+	<cfset ARGUMENTS.val = REReplace(ARGUMENTS.val, "_", " ", "all")>
+	<cfset ARGUMENTS.val = REReplace(ARGUMENTS.val, "\b(\S)(\S*)\b", "\u\1\L\2", "all")>
+	<cfset ARGUMENTS.val = REReplace(ARGUMENTS.val, " ", "", "all")>
+	<cfset ARGUMENTS.val = right(ARGUMENTS.val, 2) NEQ "id" ? ARGUMENTS.val : left(ARGUMENTS.val, len(ARGUMENTS.val) - 2 ) >
+
+	<cfreturn ARGUMENTS.val>
+</cffunction>	
