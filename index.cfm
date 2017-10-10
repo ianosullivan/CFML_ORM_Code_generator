@@ -1,7 +1,27 @@
+<!--- Set page processing time to 1 minute  --->
+<cfsetting requesttimeout="60">
+
+
 <title>ORM FIle Builder</title>
 
 <cfparam name="URL.tables" default="">
 <cfparam name="URL.datasource" default="cipci">
+
+<cfif isDefined("URL.create_files")>
+	<cfset URL.create_files = true>
+<cfelse>
+	<cfset URL.create_files = false>
+</cfif>
+
+<!--- Do we want to create/recreate the actually ORM files? --->
+<cfif URL.create_files>
+	<cfset base_path = getDirectoryFromPath(getCurrentTemplatePath())>
+	<cfset orm_folder_path = base_path & 'application\ORM\'>
+
+	<cfif !directoryExists(orm_folder_path)>
+		<cfset directoryCreate(orm_folder_path)>
+	</cfif>
+</cfif>
 
 
 <!--- See code-prettify here - https://github.com/google/code-prettify --->
@@ -13,8 +33,9 @@
 	
 <cfif URL.datasource EQ "">
 	Please specify the URL parameters for;<br/>  
-	<b>datasource</b> and optionally specify the <b>tables</b>. <br>
-	Note: If no tables are specified all will be returned
+	<b>'datasource'</b> and optionally specify the <b>'tables'</b> and 'create_files'. <br>
+	Note: If no tables are specified all will be returned <br>
+	'create_files' will actually create the ORM files at ~\application\ORM\{orm_file_name}.cfc
 </cfif>
 
 <cfif URL.tables EQ "">
@@ -199,6 +220,19 @@
 	<!--- The below code is placed within a <pre> tag to allow it to be copied as is into cfc file without any formatting changes needed --->
 	<pre class="prettyprint lang-html">#ormCode#</pre>
 
+	<!--- Create the file if the URL var  --->
+	<cfif URL.create_files>
+		<cfset orm_file_path = orm_folder_path & qry_tableNames.name & '.cfc'>
+		
+		<!--- Translate the HTML output code to CF code --->
+		<cfset ormCode = replace(ormCode, '&lt;', '<', 'all')>
+		<cfset ormCode = replace(ormCode, '&gt;', '>', 'all')>
+		<cfset ormCode = replace(ormCode, '<br>',  Chr(13) & Chr(10), 'all')>
+		<cfset ormCode = replace(ormCode, '&##9;',  Chr(9), 'all')>
+
+		<cfset fileWrite(orm_file_path, ormCode)>
+		<p>ORM file has been created at <b>#orm_file_path#</b></p>
+	</cfif>	
 	<!--- <hr /> --->
 	<br><br>
 </cfoutput>
