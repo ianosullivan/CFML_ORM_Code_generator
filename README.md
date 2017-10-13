@@ -1,5 +1,5 @@
-CFML_ORM_Code_generator
-=======================
+CFML ORM File generator & builder
+=================================
 
 CFML ORM Code generator that loops through the system tables tables in a MSSQL DB. It finds any defined relationships and outputs copyable code required to create all of your ORM CFC files.
 
