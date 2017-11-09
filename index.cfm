@@ -1,11 +1,18 @@
 <!--- Set page processing time to 1 minute  --->
-<cfsetting requesttimeout="60">
-
+<cfsetting requesttimeout="120">
 
 <title>ORM FIle Builder</title>
 
 <cfparam name="URL.tables" default="">
-<cfparam name="URL.datasource" default="cipci">
+<cfparam name="URL.datasource" default="">
+
+<cfif URL.datasource EQ "">
+	Please specify the URL parameters for;<br/>  
+	<b>'datasource'</b> and optionally specify the <b>'tables'</b> and <b>'create_files'</b>. <br><br>
+	Note: If no tables are specified all will be returned. <br>
+	'create_files' will actually create the ORM files in this codebase at ~\application\ORM\{orm_file_name}.cfc. So you can copy this folder into your app and setup ORM acccordingly.
+	<cfabort>
+</cfif>
 
 <cfif isDefined("URL.create_files")>
 	<cfset URL.create_files = true>
@@ -30,27 +37,29 @@
 <link rel="stylesheet" href="https://cdn.rawgit.com/google/code-prettify/760e6e73/styles/desert.css" />
 <style>pre{white-space: pre-wrap;}</style> <!--- Allow <pre> element to wrap if necessary --->
 
-	
-<cfif URL.datasource EQ "">
-	Please specify the URL parameters for;<br/>  
-	<b>'datasource'</b> and optionally specify the <b>'tables'</b> and 'create_files'. <br>
-	Note: If no tables are specified all will be returned <br>
-	'create_files' will actually create the ORM files at ~\application\ORM\{orm_file_name}.cfc
-</cfif>
+
+<!--- Assume we only listed DB tables to begin with --->
+<cfset all_tables = false>
 
 <cfif URL.tables EQ "">
+	<cfset all_tables = true>
+
 	<!--- Get ALL table names --->
 	<cfquery name="qry_tableNames" datasource="#URL.datasource#">
 		SELECT 	name
 		FROM 	sys.tables
 		WHERE 	type = 'U'
+		AND 	name != 'sysdiagrams'
 	</cfquery>
 
 	<cfset URL.tables = valueList(qry_tableNames.name)>
 </cfif>
 
-
-<h3>ORM Code for Tables;</h3>
+<cfif all_tables>
+	<h3>ORM Code for all database tables</h3>
+<cfelse>
+	<h3>ORM Code for database tables;</h3>
+</cfif>	
 
 <cfset sql_in_clause = "">
 <cfset first = true>
@@ -64,12 +73,14 @@
 			<cfset sql_in_clause &= "'" & i & "'">
 			<cfset first = false>
 		</cfif>	
-
-		<cfoutput><li>#i#</li></cfoutput>
+		
+		<!--- Only Output this only if all_tables is false. IE. If the user has specified tables in the URL param --->
+		<cfif !all_tables>
+			<cfoutput><li>#i#</li></cfoutput>
+		</cfif>
 	</cfloop>
 </ol>	
 
-<hr/>
 <br/><br/>
 
 
@@ -96,145 +107,152 @@
 	<cfdump var="#qry_tableColumns#"> --->
 
 
-	<b title="ORM component file should be named '#qry_tableNames.name#.cfc'">#qry_tableNames.currentrow#: #qry_tableNames.name#.cfc</b>
-
-	<!--- Start the <cfcomponent> --->
-	<cfset ormCode = '&lt;cfcomponent persistent="true"&gt;'>
-
-	<!--- Set empty strings for the relationshiops. These will be populated if relationships are found --->
-	<cfset fk_relationships = ''> <!--- many-to-one --->
-	<cfset pk_relationships_one_to_many = ''> 
-	<cfset pk_relationships_many_to_many = ''>
-	
-	<!--- Get primary key of this table --->
+	<!--- Get primary key of this table (if any). If it is a junction/bus table (with no PK) so it should be skipped --->
 	<cfset pk_column_name = getPrimaryKey(qry_tableNames.name)>
-
-	<!--- Loop through the table columns --->
-	<cfloop query="qry_tableColumns">
-		
-		<!--- check if this column has any FK relations (many-to-one) --->
-		<cfset qry_FK_col_relationship = checkRelationship( qry_tableNames.name, qry_tableColumns.column_name, 'FK')>
-		
-		<!--- If there are no foreign keys for this column so output the standard <cfproperty> element --->
-		<cfif qry_FK_col_relationship.recordcount EQ 0>
-			<!--- Start the <cfproperty> tag --->
-			<cfset ormCode &= '<br>&##9;&lt;cfproperty name="' & qry_tableColumns.column_name & '"'>
-				
-				<!--- If this is the PK for this table then output the extra PK attributes --->
-				<cfif qry_tableColumns.column_name EQ pk_column_name>
-					<!--- Add the attributes for the PK column --->
-					<cfset ormCode &= ' fieldtype="id" generator="native"'>						
-				</cfif>
-			
-			<!--- Close the <cfproperty> --->
-			<cfset ormCode &= '&gt;'>
-		
-
-		<!--- This column has a FK relationship so output the <cfproperty> relationship --->
-		<cfelse>
-
-			<!--- Output a CF comment with the basic <cfproperty> in case a user doesn't want to use the relationship below --->
-			<cfset fk_relationships &= '<br>&##9;&lt;!--- &lt;cfproperty name="' & qry_tableColumns.column_name & '"&gt; ---&gt;'>
-
-			<!--- <cfproperty name="Message" fieldtype="many-to-one" cfc="de_msgs_new" fkcolumn="msg_id"> --->
-			<cfset fk_relationships &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_tableColumns.column_name) & '" fieldtype="many-to-one" ' >
-			<cfset fk_relationships &= 'cfc="' & qry_FK_col_relationship.PK_table & '" fkcolumn="' & qry_FK_col_relationship.FK_column & '"' >
-			<cfset fk_relationships &= '&gt;'>
-		</cfif>	
-		
-
-		<!--- Check if this column has any PK relations. These can be one-to-many and many-to-many --->
-		<cfset qry_PK_col_relationships = checkRelationship( qry_tableNames.name, qry_tableColumns.column_name, 'PK')>
-		
-		<!--- Loop over any PK relationships found --->
-		<cfloop query="qry_PK_col_relationships">
-
-			<!--- To find out if the the relationship is a one-to-many or many-to-many (junction/bus) table we check if the ADJOINING table has a PK or not. 
-				If no PK is found it is a bus table --->
-			<cfset pk_column_exists = getPrimaryKey(qry_PK_col_relationships.FK_table)>
-			
-			<!--- If PK of adjoining table we can assume it is a many-to-many (junction/bus) table --->
-			<cfif pk_column_exists EQ "">
-		
-				<!--- As this is a junction/bus table we need to get the details of the joining table on the other side --->
-				<!--- <cfset qry_many_to_many_joining_table = checkRelationship( qry_PK_col_relationships.FK_table, qry_PK_col_relationships.PK_column, qry_tableNames.name)> --->
-				<cfset qry_many_to_many_joining_table = checkRelationship( qry_PK_col_relationships.FK_table, qry_PK_col_relationships.PK_column, 'many-to-many', qry_tableNames.name)>
-
-				<!--- <br>
-				<cfdump var="#qry_PK_col_relationships.FK_table#"><br>
-				<cfdump var="#qry_PK_col_relationships.PK_column#"><br>
-				<cfdump var="#qry_many_to_many_joining_table#"> --->
-
-
-				<!--- Detailed <cfproperty name="FDI" fieldtype="many-to-many" cfc="fdi" linktable="de_msgs_fdi"      fkcolumn="msg_id" inversejoincolumn="fdi_id"> --->
-				<!--- Simple <cfproperty name="FDI" fieldtype="many-to-many" cfc="fdi" linktable="de_msgs_fdi"> --->
-				<cfset pk_relationships_many_to_many &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_PK_col_relationships.FK_table) & '" fieldtype="many-to-many" ' >
-				<cfset pk_relationships_many_to_many &= 'cfc="' & qry_many_to_many_joining_table.PK_table & '" linktable="' & qry_PK_col_relationships.FK_table & '" '>
-				<!--- This line may note be required. It is only if the column names in the junction/bus table don't match the PK table --->
-				<cfset pk_relationships_many_to_many &= 'fkcolumn="' & qry_PK_col_relationships.FK_column & '" inversejoincolumn="' & qry_many_to_many_joining_table.FK_column & '"'>
-				<!--- Close the <cfproperty> relationship --->
-				<cfset pk_relationships_many_to_many &= '&gt;'>	
-
-
-			<cfelse> <!--- Adjoining table has a PK so this is treated a a one-to-many join --->
-				<cfset pk_relationships_one_to_many &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_PK_col_relationships.FK_table) & '" fieldtype="one-to-many" ' >
-				<cfset pk_relationships_one_to_many &= 'cfc="' & qry_PK_col_relationships.FK_table & '" fkcolumn="' & qry_PK_col_relationships.FK_column & '"' >
-				<cfset pk_relationships_one_to_many &= '&gt;'>	
-			</cfif>
-		</cfloop>
-
-	</cfloop>
 	
-	<!--- Add the FK relationships (if any) --->
-	<cfif fk_relationships NEQ ''>
-		<!--- Output a CF comment --->
-		<cfset ormCode &= '<br><br>&##9;&lt;!--- FK Relationships ---&gt;'>
+	<!--- If this table has a PK proceed --->
+	<cfif pk_column_name NEQ ''>
+
+		<!--- Start the <cfcomponent> --->
+		<cfset ormCode = '&lt;cfcomponent persistent="true"&gt;'>
+
+		<!--- Set empty strings for the relationshiops. These will be populated if relationships are found --->
+		<cfset fk_relationships = ''> <!--- many-to-one --->
+		<cfset pk_relationships_one_to_many = ''> 
+		<cfset pk_relationships_many_to_many = ''>
 		
-		<!--- Add FK relations --->
-		<cfset ormCode &= fk_relationships>
-	</cfif>
 
-	<!--- Add the many-to-many relationships --->
-	<cfif pk_relationships_one_to_many NEQ ''>
-		<!--- Output a CF comment --->
-		<cfset ormCode &= '<br><br>&##9;&lt;!--- PK "one-to-many" Relationships ---&gt;'>
+		<b title="ORM component file should be named '#qry_tableNames.name#.cfc'">#qry_tableNames.currentrow#: #qry_tableNames.name#.cfc</b>
+
+		<!--- Loop through the table columns --->
+		<cfloop query="qry_tableColumns">
+			
+			<!--- check if this column has any FK relations (many-to-one) --->
+			<cfset qry_FK_col_relationship = checkRelationship( qry_tableNames.name, qry_tableColumns.column_name, 'FK' )>
+			
+			<!--- If there are no foreign keys for this column so output the standard <cfproperty> element --->
+			<cfif qry_FK_col_relationship.recordcount EQ 0>
+				<!--- Start the <cfproperty> tag --->
+				<cfset ormCode &= '<br>&##9;&lt;cfproperty name="' & qry_tableColumns.column_name & '"'>
+					
+					<!--- If this is the PK for this table then output the extra PK attributes --->
+					<cfif qry_tableColumns.column_name EQ pk_column_name>
+						<!--- Add the attributes for the PK column --->
+						<cfset ormCode &= ' fieldtype="id" generator="native"'>						
+					</cfif>
+				
+				<!--- Close the <cfproperty> --->
+				<cfset ormCode &= '&gt;'>
+			
+
+			<!--- This column has a FK relationship so output the <cfproperty> relationship --->
+			<cfelse>
+
+				<!--- Output a CF comment with the basic <cfproperty> in case a user doesn't want to use the relationship below --->
+				<cfset fk_relationships &= '<br>&##9;&lt;!--- &lt;cfproperty name="' & qry_tableColumns.column_name & '"&gt; ---&gt;'>
+
+				<!--- <cfproperty name="Message" fieldtype="many-to-one" cfc="de_msgs_new" fkcolumn="msg_id"> --->
+				<cfset fk_relationships &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_tableColumns.column_name) & '" fieldtype="many-to-one" ' >
+				<cfset fk_relationships &= 'cfc="' & qry_FK_col_relationship.PK_table & '" fkcolumn="' & qry_FK_col_relationship.FK_column & '"' >
+				<cfset fk_relationships &= '&gt;'>
+			</cfif>	
+			
+
+			<!--- Check if this column has any PK relations. These can be one-to-many and many-to-many --->
+			<cfset qry_PK_col_relationships = checkRelationship( qry_tableNames.name, qry_tableColumns.column_name, 'PK')>
+			
+			<!--- Loop over any PK relationships found --->
+			<cfloop query="qry_PK_col_relationships">
+
+				<!--- To find out if the the relationship is a one-to-many or many-to-many (junction/bus) table we check if the ADJOINING table has a PK or not. 
+					If no PK is found it is a bus table --->
+				<cfset pk_column_exists = getPrimaryKey(qry_PK_col_relationships.FK_table)>
+				
+				<!--- If PK of adjoining table we can assume it is a many-to-many (junction/bus) table --->
+				<cfif pk_column_exists EQ "">
+			
+					<!--- As this is a junction/bus table we need to get the details of the joining table on the other side --->
+					<!--- <cfset qry_many_to_many_joining_table = checkRelationship( qry_PK_col_relationships.FK_table, qry_PK_col_relationships.PK_column, qry_tableNames.name)> --->
+					<cfset qry_many_to_many_joining_table = checkRelationship( qry_PK_col_relationships.FK_table, qry_PK_col_relationships.PK_column, 'many-to-many', qry_tableNames.name)>
+
+					<!--- <br>
+					<cfdump var="#qry_PK_col_relationships.FK_table#"><br>
+					<cfdump var="#qry_PK_col_relationships.PK_column#"><br>
+					<cfdump var="#qry_many_to_many_joining_table#"> --->
+
+
+					<!--- Detailed <cfproperty name="FDI" fieldtype="many-to-many" cfc="fdi" linktable="de_msgs_fdi"      fkcolumn="msg_id" inversejoincolumn="fdi_id"> --->
+					<!--- Simple <cfproperty name="FDI" fieldtype="many-to-many" cfc="fdi" linktable="de_msgs_fdi"> --->
+					<cfset pk_relationships_many_to_many &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_PK_col_relationships.FK_table) & '" fieldtype="many-to-many" ' >
+					<cfset pk_relationships_many_to_many &= 'cfc="' & qry_many_to_many_joining_table.PK_table & '" linktable="' & qry_PK_col_relationships.FK_table & '" '>
+					<!--- This line may note be required. It is only if the column names in the junction/bus table don't match the PK table --->
+					<cfset pk_relationships_many_to_many &= 'fkcolumn="' & qry_PK_col_relationships.FK_column & '" inversejoincolumn="' & qry_many_to_many_joining_table.FK_column & '"'>
+					<!--- Close the <cfproperty> relationship --->
+					<cfset pk_relationships_many_to_many &= '&gt;'>	
+
+
+				<cfelse> <!--- Adjoining table has a PK so this is treated a a one-to-many join --->
+					<cfset pk_relationships_one_to_many &= '<br>&##9;&lt;cfproperty name="' & TitleCase(qry_PK_col_relationships.FK_table) & '" fieldtype="one-to-many" ' >
+					<cfset pk_relationships_one_to_many &= 'cfc="' & qry_PK_col_relationships.FK_table & '" fkcolumn="' & qry_PK_col_relationships.FK_column & '"' >
+					<cfset pk_relationships_one_to_many &= '&gt;'>	
+				</cfif>
+			</cfloop>
+
+		</cfloop>
 		
-		<!--- Add one-to-many relationships (if any) --->
-		<cfset ormCode &= pk_relationships_one_to_many>
-	</cfif>
+		<!--- Add the FK relationships (if any) --->
+		<cfif fk_relationships NEQ ''>
+			<!--- Output a CF comment --->
+			<cfset ormCode &= '<br><br>&##9;&lt;!--- FK Relationships ---&gt;'>
+			
+			<!--- Add FK relations --->
+			<cfset ormCode &= fk_relationships>
+		</cfif>
 
-	<!--- Add the many-to-many relationships (if any) --->
-	<cfif pk_relationships_many_to_many NEQ ''>
-		<!--- Output a CF comment --->
-		<cfset ormCode &= '<br><br>&##9;&lt;!--- PK "many-to-many" (junction/bus) Relationships'>
-		<cfset ormCode &= '<br>&##9;Note that the "fkcolumn" and "inversejoincolumn" attributes below are required only if <br>&##9;they column names in the junction/bus table do not match the column names in the corresponding PK/FK tables ---&gt;'>
-		
-		<!--- Add many-to-many relationships --->
-		<cfset ormCode &= pk_relationships_many_to_many>
-	</cfif>
+		<!--- Add the many-to-many relationships --->
+		<cfif pk_relationships_one_to_many NEQ ''>
+			<!--- Output a CF comment --->
+			<cfset ormCode &= '<br><br>&##9;&lt;!--- PK "one-to-many" Relationships ---&gt;'>
+			
+			<!--- Add one-to-many relationships (if any) --->
+			<cfset ormCode &= pk_relationships_one_to_many>
+		</cfif>
+
+		<!--- Add the many-to-many relationships (if any) --->
+		<cfif pk_relationships_many_to_many NEQ ''>
+			<!--- Output a CF comment --->
+			<cfset ormCode &= '<br><br>&##9;&lt;!--- PK "many-to-many" (junction/bus) Relationships'>
+			<cfset ormCode &= '<br>&##9;Note that the "fkcolumn" and "inversejoincolumn" attributes below are required only if <br>&##9;they column names in the junction/bus table do not match the column names in the corresponding PK/FK tables ---&gt;'>
+			
+			<!--- Add many-to-many relationships --->
+			<cfset ormCode &= pk_relationships_many_to_many>
+		</cfif>
 
 
-	<!--- Close the component tag --->
-	<cfset ormCode &= '<br>&lt;/cfcomponent&gt;'>
+		<!--- Close the component tag --->
+		<cfset ormCode &= '<br>&lt;/cfcomponent&gt;'>
 
-	<!--- The below code is placed within a <pre> tag to allow it to be copied as is into cfc file without any formatting changes needed --->
-	<pre class="prettyprint lang-html">#ormCode#</pre>
+		<!--- The below code is placed within a <pre> tag to allow it to be copied as is into cfc file without any formatting changes needed --->
+		<pre class="prettyprint lang-html">#ormCode#</pre>
 
-	<!--- Create the file if the URL var  --->
-	<cfif URL.create_files>
-		<cfset orm_file_path = orm_folder_path & qry_tableNames.name & '.cfc'>
-		
-		<!--- Translate the HTML output code to CF code --->
-		<cfset ormCode = replace(ormCode, '&lt;', '<', 'all')>
-		<cfset ormCode = replace(ormCode, '&gt;', '>', 'all')>
-		<cfset ormCode = replace(ormCode, '<br>',  Chr(13) & Chr(10), 'all')>
-		<cfset ormCode = replace(ormCode, '&##9;',  Chr(9), 'all')>
+		<!--- Create the file if the URL var  --->
+		<cfif URL.create_files>
+			<cfset orm_file_path = orm_folder_path & qry_tableNames.name & '.cfc'>
+			
+			<!--- Translate the HTML output code to CF code --->
+			<cfset ormCode = replace(ormCode, '&lt;', '<', 'all')>
+			<cfset ormCode = replace(ormCode, '&gt;', '>', 'all')>
+			<cfset ormCode = replace(ormCode, '<br>',  Chr(13) & Chr(10), 'all')>
+			<cfset ormCode = replace(ormCode, '&##9;',  Chr(9), 'all')>
 
-		<cfset fileWrite(orm_file_path, ormCode)>
-		<p>ORM file has been created at <b>#orm_file_path#</b></p>
-	</cfif>	
-	<!--- <hr /> --->
-	<br><br>
+			<cfset fileWrite(orm_file_path, ormCode)>
+			<p>ORM file has been created at <b>#orm_file_path#</b></p>
+		</cfif>	
+		<!--- <hr /> --->
+		<br><br>
+
+	</cfif> <!--- End check for table PK --->
+
 </cfoutput>
 
 
