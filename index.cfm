@@ -1,7 +1,7 @@
 <!--- Set page processing time to 1 minute  --->
 <cfsetting requesttimeout="120">
 
-<title>ORM FIle Builder</title>
+<title>ORM File Builder</title>
 
 <cfparam name="URL.tables" default="">
 <cfparam name="URL.datasource" default="">
