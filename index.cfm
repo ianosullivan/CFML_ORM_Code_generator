@@ -144,7 +144,7 @@
 				<!--- If this column is nullable then add notnull="false". This allows default null values to be saved to the DB. Otherwise you have to insert a value --->
 				<cfif qry_tableColumns.is_nullable EQ 'YES'>
 					<!--- Add the attributes for the PK column --->
-					<cfset ormCode &= ' notnull="false"'>						
+					<cfset ormCode &= ' notnull="false" hint="For nullable columns, this allows default null values to be saved to the DB. Otherwise you have to insert a value"'>						
 				</cfif>
 				
 				<!--- Close the <cfproperty> --->
