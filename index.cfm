@@ -98,7 +98,7 @@
 <cfoutput query="qry_tableNames">
 	<!--- Get column names for this table --->
 	<cfquery name="qry_tableColumns" datasource="#URL.datasource#">
-		SELECT 	column_name
+		SELECT 	column_name, is_nullable
 		FROM 	information_schema.columns
 		WHERE 	table_name = '#qry_tableNames.name#'
 	</cfquery>
@@ -134,12 +134,18 @@
 			<cfif qry_FK_col_relationship.recordcount EQ 0>
 				<!--- Start the <cfproperty> tag --->
 				<cfset ormCode &= '<br>&##9;&lt;cfproperty name="' & qry_tableColumns.column_name & '"'>
-					
-					<!--- If this is the PK for this table then output the extra PK attributes --->
-					<cfif qry_tableColumns.column_name EQ pk_column_name>
-						<!--- Add the attributes for the PK column --->
-						<cfset ormCode &= ' fieldtype="id" generator="native"'>						
-					</cfif>
+				
+				<!--- If this is the PK for this table then output the extra PK attributes --->
+				<cfif qry_tableColumns.column_name EQ pk_column_name>
+					<!--- Add the attributes for the PK column --->
+					<cfset ormCode &= ' fieldtype="id" generator="native"'>						
+				</cfif>
+				
+				<!--- If this column is nullable then add notnull="false". This allows default null values to be saved to the DB. Otherwise you have to insert a value --->
+				<cfif qry_tableColumns.is_nullable EQ 'YES'>
+					<!--- Add the attributes for the PK column --->
+					<cfset ormCode &= ' notnull="false"'>						
+				</cfif>
 				
 				<!--- Close the <cfproperty> --->
 				<cfset ormCode &= '&gt;'>
